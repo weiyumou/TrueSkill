@@ -12,6 +12,7 @@ def win_probability(rating_a, rating_b):
                  + pow(rating_b.sigma, 2))
     return cdf(delta_mu / denom)
 
+start_season = 2005
 # Get matches to predict
 predict_titles = []
 matches_to_predict = []
@@ -28,8 +29,18 @@ with open('dataset/RegularSeasonCompactResults.csv', newline = '') as csvfile:
     reader = csv.reader(csvfile, delimiter = ',')
     regular_res_titles = reader.__next__()
     for row in reader:
-        if int(row[regular_res_titles.index('Season')]) >= 2008:
+        if int(row[regular_res_titles.index('Season')]) >= start_season:
             regular_res.append(row)
+
+# Get tourney match results
+tourney_res_titles = []
+tourney_res = []
+##with open('dataset/TourneyCompactResults.csv', newline = '') as csvfile:
+##    reader = csv.reader(csvfile, delimiter = ',')
+##    tourney_res_titles = reader.__next__()
+##    for row in reader:
+##        if int(row[tourney_res_titles.index('Season')]) >= start_season:
+##            tourney_res.append(row)
 
 # Get all teams           
 teams = matches_to_predict[0].split('_')[1:]
@@ -48,21 +59,45 @@ for score_diff in range(0, 11):
         if int(recd[regular_res_titles.index('Wscore')]) - \
            int(recd[regular_res_titles.index('Lscore')]) <= score_diff:
             num_draw = num_draw + 1
-    draw_rates[score_diff] = num_draw / len(regular_res)
+
+##    for recd in tourney_res:
+##        if int(recd[tourney_res_titles.index('Wscore')]) - \
+##           int(recd[tourney_res_titles.index('Lscore')]) <= score_diff:
+##            num_draw = num_draw + 1
+            
+    draw_rates[score_diff] = num_draw / (len(regular_res) + len(tourney_res))
 
 # Build models for all score differences
 for score_diff in draw_rates.keys():
     env = TrueSkill(draw_probability = draw_rates[score_diff])
     team_rating = dict(zip(teams, [env.create_rating()] * len(teams)))
-    for recd in regular_res:
-        wteam = recd[regular_res_titles.index('Wteam')]
-        lteam = recd[regular_res_titles.index('Lteam')]
-        wscore = int(recd[regular_res_titles.index('Wscore')])
-        lscore = int(recd[regular_res_titles.index('Lscore')])
 
-        if wteam in team_rating and lteam in team_rating:
-            team_rating[wteam], team_rating[lteam] = rate_1vs1(team_rating[wteam],\
-                team_rating[lteam], drawn = (wscore - lscore <= score_diff), env = env)
+    regular_row = 0
+    tourney_row = 0
+    for season in range(start_season,2017):
+        while regular_row < len(regular_res) and \
+              int(regular_res[regular_row][regular_res_titles.index('Season')]) <= season:
+            wteam = regular_res[regular_row][regular_res_titles.index('Wteam')]
+            lteam = regular_res[regular_row][regular_res_titles.index('Lteam')]
+            wscore = int(regular_res[regular_row][regular_res_titles.index('Wscore')])
+            lscore = int(regular_res[regular_row][regular_res_titles.index('Lscore')])
+
+            if wteam in team_rating and lteam in team_rating:
+                team_rating[wteam], team_rating[lteam] = rate_1vs1(team_rating[wteam],\
+                    team_rating[lteam], drawn = (wscore - lscore <= score_diff), env = env)
+            regular_row = regular_row + 1
+
+##        while tourney_row < len(tourney_res) and \
+##              int(tourney_res[tourney_row][tourney_res_titles.index('Season')]) <= season:
+##            wteam = tourney_res[tourney_row][tourney_res_titles.index('Wteam')]
+##            lteam = tourney_res[tourney_row][tourney_res_titles.index('Lteam')]
+##            wscore = int(tourney_res[tourney_row][tourney_res_titles.index('Wscore')])
+##            lscore = int(tourney_res[tourney_row][tourney_res_titles.index('Lscore')])
+##
+##            if wteam in team_rating and lteam in team_rating:
+##                team_rating[wteam], team_rating[lteam] = rate_1vs1(team_rating[wteam],\
+##                    team_rating[lteam], drawn = (wscore - lscore <= score_diff), env = env)
+##            tourney_row = tourney_row + 1
      
     probabilities = []
     for i in range(0, len(teams)):
@@ -70,7 +105,7 @@ for score_diff in draw_rates.keys():
             probabilities.append(win_probability(team_rating[teams[i]], team_rating[teams[j]]))
 
     predict_res = list(zip(matches_to_predict, probabilities))
-    with open('dataset/results/predict' + str(score_diff) + '.csv', 'w', newline = '') as csvfile:
+    with open('results/predict' + str(score_diff) + '.csv', 'w', newline = '') as csvfile:
         writer = csv.writer(csvfile, quoting = csv.QUOTE_MINIMAL)
         writer.writerows(predict_titles)
         writer.writerows(predict_res)
