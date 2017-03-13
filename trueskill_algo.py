@@ -21,7 +21,7 @@ with open('dataset/SampleSubmission.csv', newline = '') as csvfile:
     for row in reader:
         matches_to_predict.append(row[0])
 
-# Get regular sesson match results
+# Get regular season match results
 regular_res_titles = []
 regular_res = []
 with open('dataset/RegularSeasonCompactResults.csv', newline = '') as csvfile:
