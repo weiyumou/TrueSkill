@@ -122,7 +122,7 @@ with open('dataset/RegularSeasonCompactResults.csv', newline = '') as csvfile:
             row[regular_titles.index('Numot')] = int(row[regular_titles.index('Numot')])
             regular_matches.append(row)
 
-# Get all teams           
+# Get all teams
 teams = predict_matches[0].split('_')[1:]
 for recd in predict_matches[1:]:
     ret = recd.split('_')
@@ -135,8 +135,9 @@ from copy import deepcopy
 # Home advantage: deduct x scores from a home-winner
 max_home_adv = 6.0
 home_adv = 0.0
+victory_margin = 11 # use math.inf to disable this feature
 while home_adv < max_home_adv:
-    evaluator = NoOvertime(teams, regular_titles, deepcopy(regular_matches), home_adv, 11)
+    evaluator = NoOvertime(teams, regular_titles, deepcopy(regular_matches), home_adv, victory_margin)
     probs = evaluator.startEvaluation()
     predict_res = list(zip(predict_matches, probs))
     with open('results/' + str(home_adv).replace('.', '_') + '.csv', 'w', newline = '') as csvfile:
