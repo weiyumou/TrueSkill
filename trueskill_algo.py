@@ -1,15 +1,15 @@
 # pip3 install trueskill
 # Docs: http://trueskill.org/
-
+import math
+import trueskill
 class NaiveEvaluator:
-    def __init__(self, eval_teams, regu_titles, regu_matches, vic_margin):
+    def __init__(self, eval_teams, regu_titles, regu_matches, vic_margin = math.inf):
         self.teams = eval_teams
         self.regular_titles = regu_titles
         self.regular_matches = regu_matches
         self.victory_margin = vic_margin
         
     def rate_team(self):
-        import trueskill
         trueskill.setup(draw_probability = self.draw_prob())
         team_rating = dict(zip(self.teams, [trueskill.global_env().create_rating()] * len(self.teams)))
         for match in self.regular_matches:
@@ -58,13 +58,10 @@ class NaiveEvaluator:
         return num_draw / len(self.regular_matches)
 
     def win_probability(self, rating_a, rating_b):
-        from trueskill import BETA
-        from math import sqrt
-        from trueskill.backends import cdf
         delta_mu = rating_a.mu - rating_b.mu
-        denom = sqrt(2 * (BETA * BETA) + pow(rating_a.sigma, 2) \
+        denom = math.sqrt(2 * (trueskill.BETA * trueskill.BETA) + pow(rating_a.sigma, 2) \
                      + pow(rating_b.sigma, 2))
-        return cdf(delta_mu / denom)
+        return trueskill.backends.cdf(delta_mu / denom)
 
 class HomeCourtAdv(NaiveEvaluator):
     def __init__(self, eval_teams, regu_titles, regu_matches, home_advtg, vic_margin):
@@ -135,8 +132,9 @@ from copy import deepcopy
 # Home advantage: deduct x scores from a home-winner
 max_home_adv = 6.0
 home_adv = 0.0
-victory_margin = 11 # use math.inf to disable this feature
+victory_margin = 11
 while home_adv < max_home_adv:
+    # use default value for victory_margin to disable this feature
     evaluator = NoOvertime(teams, regular_titles, deepcopy(regular_matches), home_adv, victory_margin)
     probs = evaluator.startEvaluation()
     predict_res = list(zip(predict_matches, probs))
