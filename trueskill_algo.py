@@ -2,12 +2,11 @@
 # Docs: http://trueskill.org/
 
 class TrueSkillEvaluator:
-    def __init__(self, eval_teams, regu_titles, regu_matches, home_advtg, draw_mrgn):
+    def __init__(self, eval_teams, regu_titles, regu_matches, home_advtg):
         self.teams = eval_teams
         self.regular_titles = regu_titles
         self.regular_matches = regu_matches
         self.home_adv = home_advtg
-        self.draw_margin = draw_mrgn
         
     def home_adv_adjust(self):
         for match in self.regular_matches:
@@ -16,52 +15,29 @@ class TrueSkillEvaluator:
                 match[self.regular_titles.index('Wscore')] -= self.home_adv
 
     def startEvaluation(self):
-        from trueskill import Rating, TrueSkill, rate_1vs1
+        import trueskill
         self.home_adv_adjust()
-        draw_rates = self.calculate_draw_rate()
-        results = dict()
-        for score_diff in range(0, self.draw_margin):
-##            env = TrueSkill(draw_probability = draw_rates[score_diff])
-            env = TrueSkill(draw_probability = 0.0)
-            team_rating = dict(zip(self.teams, [env.create_rating()] * len(self.teams)))
-            for match in self.regular_matches:
-                wteam = match[self.regular_titles.index('Wteam')]
-                lteam = match[self.regular_titles.index('Lteam')]
-                wscore = match[self.regular_titles.index('Wscore')]
-                lscore = match[self.regular_titles.index('Lscore')]
+        trueskill.setup(draw_probability = 0.0)
+        team_rating = dict(zip(self.teams, [trueskill.global_env().create_rating()] * len(self.teams)))
+        
+        for match in self.regular_matches:
+            wteam = match[self.regular_titles.index('Wteam')]
+            lteam = match[self.regular_titles.index('Lteam')]
+            wscore = match[self.regular_titles.index('Wscore')]
+            lscore = match[self.regular_titles.index('Lscore')]
 
-                if wteam in team_rating and lteam in team_rating:
-                    is_draw = False
-##                    is_draw = abs(wscore - lscore) <= score_diff
-                    if (wscore < lscore):
-                        wteam, lteam = lteam, wteam
-##                    if (wscore < lscore) and not is_draw:
-##                        wteam, lteam = lteam, wteam
-                    team_rating[wteam], team_rating[lteam] = rate_1vs1(team_rating[wteam],\
-                        team_rating[lteam], drawn = is_draw, env = env)
-                    
-            probs = []
-            for i in range(0, len(teams)):
-                for j in range(i + 1, len(teams)):
-                    prob = self.win_probability(team_rating[teams[i]], team_rating[teams[j]])
-                    probs.append(prob)
-            
-            results[score_diff] = probs
-        return results
+            if wteam in team_rating and lteam in team_rating:
+                if wscore < lscore:
+                    wteam, lteam = lteam, wteam
+                team_rating[wteam], team_rating[lteam] = trueskill.rate_1vs1(team_rating[wteam], team_rating[lteam])
+                
+        probs = []
+        for i in range(0, len(teams)):
+            for j in range(i + 1, len(teams)):
+                prob = self.win_probability(team_rating[teams[i]], team_rating[teams[j]])
+                probs.append(prob)
 
-    def calculate_draw_rate(self):
-        draw_rates = dict()
-        score_diff = 0
-        while score_diff < self.draw_margin:
-            num_draw = 0
-            for recd in self.regular_matches:
-                if abs(recd[regular_titles.index('Wscore')] - \
-                   recd[regular_titles.index('Lscore')]) <= score_diff:
-                    num_draw += 1
-            draw_rates[score_diff] = num_draw / len(self.regular_matches)
-            print(draw_rates[score_diff])
-            score_diff += 1
-        return draw_rates
+        return probs
 
     def win_probability(self, rating_a, rating_b):
         from trueskill import BETA
@@ -75,7 +51,8 @@ class TrueSkillEvaluator:
 
 import csv
 start_season = 2005
-end_season = 2016
+end_season = 2016 #inclusive
+
 # Get matches to predict
 predict_titles = []
 predict_matches = []
@@ -109,16 +86,14 @@ for recd in predict_matches[1:]:
     else:
         break
 
-max_draw_margin = 1
-max_home_adv = 3
-home_adv = 2
-while home_adv < max_home_adv:
-    evaluator = TrueSkillEvaluator(teams, regular_titles, regular_matches, home_adv, max_draw_margin)
-    results = evaluator.startEvaluation()
-    for score_diff in results.keys():
-        predict_res = list(zip(predict_matches, results[score_diff]))
-        with open('results/' + str(home_adv) + "_" + str(score_diff) + '.csv', 'w', newline = '') as csvfile:
-            writer = csv.writer(csvfile, quoting = csv.QUOTE_MINIMAL)
-            writer.writerows(predict_titles)
-            writer.writerows(predict_res)
-    home_adv += 1
+from copy import deepcopy
+# Home advantage: deduct x scores from a home-winner
+max_home_adv = 6
+for home_adv in range (0, max_home_adv):
+    evaluator = TrueSkillEvaluator(teams, regular_titles, deepcopy(regular_matches), home_adv)
+    probs = evaluator.startEvaluation()
+    predict_res = list(zip(predict_matches, probs))
+    with open('results/' + str(home_adv) + '.csv', 'w', newline = '') as csvfile:
+        writer = csv.writer(csvfile, quoting = csv.QUOTE_MINIMAL)
+        writer.writerows(predict_titles)
+        writer.writerows(predict_res)
