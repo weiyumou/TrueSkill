@@ -8,6 +8,7 @@ class NaiveEvaluator:
         self.regular_titles = regu_titles
         self.regular_matches = regu_matches
         self.victory_margin = vic_margin
+##        self.leaderboard = None
         
     def rate_team(self):
         trueskill.setup(draw_probability = self.draw_prob())
@@ -31,6 +32,9 @@ class NaiveEvaluator:
                     team_rating[wteam], team_rating[lteam] = trueskill.rate_1vs1(team_rating[wteam], \
                         team_rating[lteam], drawn = self.is_equal_score(wscore, lscore))
                     wscore -= self.victory_margin
+
+##        leaderboard = sorted(list(team_rating.values()), key = trueskill.expose, reverse = True)
+##        print(leaderboard)
         return team_rating
 
     def predict(self, team_rating):
@@ -130,8 +134,8 @@ for recd in predict_matches[1:]:
 
 from copy import deepcopy
 # Home advantage: deduct x scores from a home-winner
-max_home_adv = 6.0
-home_adv = 0.0
+max_home_adv = 2
+home_adv = 1.5
 victory_margin = 11
 while home_adv < max_home_adv:
     # use default value for victory_margin to disable this feature
