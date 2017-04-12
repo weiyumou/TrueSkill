@@ -46,11 +46,27 @@ with open('dataset/RegularSeasonDetailedResults.csv', newline='') as csvfile:
             regular_matches.append(dict(zip(field_names, new_row)))
 
 
-def home_adv_adjust(w_val, l_val, score_eff, match):
+def home_advt_adj(w_val, l_val, score_eff, match):
     if w_val == 'H':
         match['Wscore'] -= score_eff
 
-offe_eval_fields = [['loc', 2.0, 2.5, 0.1, home_adv_adjust]]
+
+def general_adj(w_val, l_val, score_eff, match):
+    if w_val > l_val:
+        match['Wscore'] += score_eff
+    elif w_val < l_val:
+        match['Wscore'] -= score_eff
+
+
+def general_revs_adj(w_val, l_val, score_eff, match):
+    if w_val < l_val:
+        match['Wscore'] += score_eff
+    elif w_val > l_val:
+        match['Wscore'] -= score_eff
+
+# home_adv = 7.0, to = 1.5
+offe_eval_fields = [['to', 0.0, 3.5, 0.1, general_revs_adj],
+                    ['loc', 7.0, 7.1, 0.1, home_advt_adj]]
 offe_evaluator = TrueSkillEvaluator(predict_teams, all_teams, regular_matches, offe_eval_fields, 11)
 results = offe_evaluator.start_evaluation()
 for test in results.keys():
