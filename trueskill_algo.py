@@ -2,16 +2,27 @@
 # Docs: http://trueskill.org/
 import math
 import trueskill
+import csv
+from copy import deepcopy
+
+# import matplotlib.pyplot as plt
+# import numpy as np
+# import matplotlib.mlab as mlab
+# import matplotlib.pylab as plb
+
+
 class NaiveEvaluator:
-    def __init__(self, eval_teams, regu_titles, regu_matches, vic_margin = math.inf):
+    def __init__(self, eval_teams, regu_titles, regu_matches, vic_margin, l_adj, u_adj):
         self.teams = eval_teams
         self.regular_titles = regu_titles
         self.regular_matches = regu_matches
         self.victory_margin = vic_margin
-##        self.leaderboard = None
-        
+        self.lower_adj = l_adj
+        self.upper_adj = u_adj
+        # self.rating_history = {eval_teams[0]: [], eval_teams[1]: []}
+
     def rate_team(self):
-        trueskill.setup(draw_probability = self.draw_prob())
+        trueskill.setup(draw_probability=self.draw_prob())
         team_rating = dict(zip(self.teams, [trueskill.global_env().create_rating()] * len(self.teams)))
         for match in self.regular_matches:
             wteam = match[self.regular_titles.index('Wteam')]
@@ -23,34 +34,39 @@ class NaiveEvaluator:
                 if wscore < lscore:
                     wteam, lteam = lteam, wteam
                     wscore, lscore = lscore, wscore
-                    
-                team_rating[wteam], team_rating[lteam] = trueskill.rate_1vs1(team_rating[wteam], \
-                    team_rating[lteam], drawn = self.is_equal_score(wscore, lscore))
-                wscore -= self.victory_margin
-                
-                while wscore - lscore >= self.victory_margin:
-                    team_rating[wteam], team_rating[lteam] = trueskill.rate_1vs1(team_rating[wteam], \
-                        team_rating[lteam], drawn = self.is_equal_score(wscore, lscore))
-                    wscore -= self.victory_margin
 
-##        leaderboard = sorted(list(team_rating.values()), key = trueskill.expose, reverse = True)
-##        print(leaderboard)
+                # self.rating_history[wteam].append(team_rating[wteam])
+                # self.rating_history[lteam].append(team_rating[lteam])
+                team_rating[wteam], team_rating[lteam] = trueskill.rate_1vs1(team_rating[wteam],
+                                                                             team_rating[lteam],
+                                                                             drawn=self.is_equal_score(wscore, lscore))
+                wscore -= self.victory_margin
+
+                while wscore - lscore >= self.victory_margin:
+                    # self.rating_history[wteam].append(team_rating[wteam])
+                    # self.rating_history[lteam].append(team_rating[lteam])
+                    team_rating[wteam], team_rating[lteam] = trueskill.rate_1vs1(team_rating[wteam],
+                                                                                 team_rating[lteam],
+                                                                                 drawn=self.is_equal_score(wscore,
+                                                                                                           lscore))
+                    wscore -= self.victory_margin
         return team_rating
 
     def predict(self, team_rating):
-        probs = []
+        probabilities = []
         for i in range(0, len(teams)):
             for j in range(i + 1, len(teams)):
                 prob = self.win_probability(team_rating[teams[i]], team_rating[teams[j]])
-                probs.append(prob)
-        return probs
+                # if prob <= self.lower_adj:
+                #     prob = 0.0
+                # elif prob >= self.upper_adj:
+                #     prob = 1.0
+                probabilities.append(prob)
+        return probabilities
 
-    def startEvaluation(self):
-        team_rating = self.rate_team()                              
+    def start_evaluation(self):
+        team_rating = self.rate_team()
         return self.predict(team_rating)
-
-    def is_equal_score(self, wscore, lscore):
-        return abs(wscore - lscore) <= 1e-7
 
     def draw_prob(self):
         num_draw = 0
@@ -61,15 +77,21 @@ class NaiveEvaluator:
                 num_draw += 1
         return num_draw / len(self.regular_matches)
 
-    def win_probability(self, rating_a, rating_b):
+    @staticmethod
+    def is_equal_score(wscore, lscore):
+        return abs(wscore - lscore) <= 1e-7
+
+    @staticmethod
+    def win_probability(rating_a, rating_b):
         delta_mu = rating_a.mu - rating_b.mu
         denom = math.sqrt(2 * (trueskill.BETA * trueskill.BETA) + pow(rating_a.sigma, 2) \
-                     + pow(rating_b.sigma, 2))
+                          + pow(rating_b.sigma, 2))
         return trueskill.backends.cdf(delta_mu / denom)
 
+
 class HomeCourtAdv(NaiveEvaluator):
-    def __init__(self, eval_teams, regu_titles, regu_matches, home_advtg, vic_margin):
-        super().__init__(eval_teams, regu_titles, regu_matches, vic_margin)
+    def __init__(self, eval_teams, regu_titles, regu_matches, vic_margin, l_adj, u_adj, home_advtg):
+        super().__init__(eval_teams, regu_titles, regu_matches, vic_margin, l_adj, u_adj)
         self.home_adv = home_advtg
 
     def home_adv_adjust(self):
@@ -77,33 +99,35 @@ class HomeCourtAdv(NaiveEvaluator):
             wloc = match[self.regular_titles.index('Wloc')]
             if wloc == 'H':
                 match[self.regular_titles.index('Wscore')] -= self.home_adv
-    def startEvaluation(self):
+
+    def start_evaluation(self):
         self.home_adv_adjust()
-        return super().startEvaluation()
-    
-class NoOvertime(HomeCourtAdv):
-    def __init__(self, eval_teams, regu_titles, regu_matches, home_advtg, vic_margin):
-        super().__init__(eval_teams, regu_titles, regu_matches, home_advtg, vic_margin)
-        
+        return super().start_evaluation()
+
+
+class OvertimeAsDraw(HomeCourtAdv):
+    def __init__(self, eval_teams, regu_titles, regu_matches, vic_margin, l_adj, u_adj, home_advtg):
+        super().__init__(eval_teams, regu_titles, regu_matches, vic_margin, l_adj, u_adj, home_advtg)
+
     def adjust_overtime(self):
         for match in self.regular_matches:
             numot = match[self.regular_titles.index('Numot')]
             if numot > 0:
                 match[self.regular_titles.index('Wscore')] = match[self.regular_titles.index('Lscore')]
 
-    def startEvaluation(self):
+    def start_evaluation(self):
         self.adjust_overtime()
-        return super().startEvaluation()      
+        return super().start_evaluation()
 
-import csv
+
 start_season = 2005
-end_season = 2016 #inclusive
+end_season = 2016  # inclusive
 
 # Get matches to predict
 predict_titles = []
 predict_matches = []
-with open('dataset/SampleSubmission.csv', newline = '') as csvfile:
-    reader = csv.reader(csvfile, delimiter = ',')
+with open('dataset/SampleSubmission.csv', newline='') as csvfile:
+    reader = csv.reader(csvfile, delimiter=',')
     predict_titles.append(reader.__next__())
     for row in reader:
         predict_matches.append(row[0])
@@ -111,8 +135,8 @@ with open('dataset/SampleSubmission.csv', newline = '') as csvfile:
 # Get regular season match results
 regular_titles = []
 regular_matches = []
-with open('dataset/RegularSeasonCompactResults.csv', newline = '') as csvfile:
-    reader = csv.reader(csvfile, delimiter = ',')
+with open('dataset/RegularSeasonCompactResults.csv', newline='') as csvfile:
+    reader = csv.reader(csvfile, delimiter=',')
     regular_titles = reader.__next__()
     for row in reader:
         row[regular_titles.index('Season')] = int(row[regular_titles.index('Season')])
@@ -132,18 +156,47 @@ for recd in predict_matches[1:]:
     else:
         break
 
-from copy import deepcopy
+# teams = ['1211', '1365']
+
 # Home advantage: deduct x scores from a home-winner
-max_home_adv = 2
+max_home_adv = 2.0
+victory_margin = math.inf
+max_lower_adj = 0.11
+min_upper_adj = 0.89
+
 home_adv = 1.5
-victory_margin = 11
 while home_adv < max_home_adv:
-    # use default value for victory_margin to disable this feature
-    evaluator = NoOvertime(teams, regular_titles, deepcopy(regular_matches), home_adv, victory_margin)
-    probs = evaluator.startEvaluation()
-    predict_res = list(zip(predict_matches, probs))
-    with open('results/' + str(home_adv).replace('.', '_') + '.csv', 'w', newline = '') as csvfile:
-        writer = csv.writer(csvfile, quoting = csv.QUOTE_MINIMAL)
-        writer.writerows(predict_titles)
-        writer.writerows(predict_res)
+    lower_adj = 0.1
+    while lower_adj < max_lower_adj:
+        upper_adj = 0.9
+        while upper_adj > min_upper_adj:
+            # use default value for victory_margin to disable this feature
+            evaluator = HomeCourtAdv(teams, regular_titles, deepcopy(regular_matches),
+                                       victory_margin, lower_adj, upper_adj, home_adv)
+            probs = evaluator.start_evaluation()
+            predict_res = list(zip(predict_matches, probs))
+            with open('results/{0}_{1}_{2}.csv'.format(str(home_adv).replace('.', '_'), str(lower_adj).replace('.', '_'),
+                                                      str(upper_adj).replace('.', '_')), 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
+                writer.writerows(predict_titles)
+                writer.writerows(predict_res)
+            upper_adj -= 0.01
+        lower_adj += 0.01
     home_adv += 0.5
+    # row = 0
+    # while row < len(ratings['1211']):
+    #     mu1 = ratings['1211'][row].mu
+    #     sigma1 = ratings['1211'][row].sigma
+    #     x1 = np.linspace(mu1 - 3 * sigma1, mu1 + 3 * sigma1)
+    #
+    #     mu2 = ratings['1365'][row].mu
+    #     sigma2 = ratings['1365'][row].sigma
+    #     x2 = np.linspace(mu2 - 3 * sigma2, mu2 + 3 * sigma2)
+    #     plb.ylim([0, 0.25])
+    #     plt.plot(x1, mlab.normpdf(x1, mu1, sigma1), x2, mlab.normpdf(x2, mu2, sigma2))
+    #     plb.savefig('figures/' + str(row) + '.png')
+    #     plt.gcf().clear()
+    #     row += 1
+
+
+
