@@ -75,7 +75,7 @@ class TrueSkillEvaluator:
                 #     prob = 0.0
                 # elif prob >= 0.9:
                 #     prob = 1.0
-                probs.append(prob)
+                probs.append((self.evl_teams[i] + '_' + self.evl_teams[j], prob))
         return probs
 
     def adjust_overtime(self):
