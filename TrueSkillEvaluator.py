@@ -4,6 +4,11 @@ from copy import deepcopy
 
 
 class TrueSkillEvaluator:
+    """
+    A TrueSkillEvaluator is used to run the backend
+    TrueSkill algorithm to calculate the winning
+    probabilities. 
+    """
     def __init__(self, eval_teams, teams, eval_matches, eval_adj_fields, mov):
         self.evl_teams = eval_teams
         self.all_teams = teams
@@ -18,6 +23,10 @@ class TrueSkillEvaluator:
         return self.testings
 
     def adjust_score(self, matches, adj_fields, base_name=''):
+        """
+        This function recursively applies the test parameters
+        to run multiple tests. 
+        """
         curr_adj = adj_fields.pop()
         score_eff = curr_adj[1]
         while abs(score_eff - curr_adj[2]) >= 1e-7:
@@ -33,6 +42,10 @@ class TrueSkillEvaluator:
             score_eff += curr_adj[3]
 
     def rate_team(self, matches):
+        """
+        This function runs the TrueSkill rating system to
+        determine the skill estimates of each team. 
+        """
         trueskill.setup(draw_probability=self.draw_prob(matches))
         ratings = dict(zip(self.all_teams, [trueskill.global_env().create_rating()] * len(self.all_teams)))
         for match in matches:
@@ -50,10 +63,10 @@ class TrueSkillEvaluator:
                     trueskill.rate_1vs1(ratings[wteam], ratings[lteam], drawn=self.is_equal_score(wscore, lscore))
                 wscore -= self.vic_margin
 
-                while wscore - lscore >= self.vic_margin:
-                    ratings[wteam], ratings[lteam] = \
-                        trueskill.rate_1vs1(ratings[wteam], ratings[lteam], drawn=self.is_equal_score(wscore, lscore))
-                    wscore -= self.vic_margin
+                # while wscore - lscore >= self.vic_margin:
+                #     ratings[wteam], ratings[lteam] = \
+                #         trueskill.rate_1vs1(ratings[wteam], ratings[lteam], drawn=self.is_equal_score(wscore, lscore))
+                #     wscore -= self.vic_margin
 
         return ratings
 
